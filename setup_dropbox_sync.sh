@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# 确保能找到 /usr/local/bin 下的 dropbox 命令
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # 确保以 root 身份运行此脚本
 if [ "$(id -u)" -ne 0 ]; then
   echo "请以 root 身份运行此脚本。"
@@ -24,15 +27,23 @@ echo "1) 运行 Dropbox 并关联账户"
 echo "2) 配置同步脚本和定时任务"
 echo "3) 启动 Dropbox 并立即同步一次"
 echo "4) 退出脚本"
-read -p "请输入选择 (1, 2, 3 或 4): " choice
+read -r -p "请输入选择 (1, 2, 3 或 4): " choice
 
-if [ "$choice" -eq 1 ]; then
+case "$choice" in
+  1|2|3|4) ;;
+  *)
+    echo "无效的选择。退出。"
+    exit 1
+    ;;
+esac
+
+if [ "$choice" = "1" ]; then
   # 下载并安装 Dropbox 守护进程
-  cd "$HOME"
+  cd "$HOME" || exit 1
   wget -O - "https://www.dropbox.com/download?plat=lnx.x86_64" | tar xzf -
 
   # 运行 Dropbox 守护进程
-  cd "$HOME/.dropbox-dist"
+  cd "$HOME/.dropbox-dist" || exit 1
   ./dropboxd &
 
   # 提示用户完成浏览器中的 Dropbox 账户关联
@@ -49,12 +60,12 @@ if [ "$choice" -eq 1 ]; then
   exit 0
 fi
 
-if [ "$choice" -eq 2 ]; then
+if [ "$choice" = "2" ]; then
   # 询问服务器默认目录和 Dropbox 默认目录
-  read -p "请输入服务器默认目录,如无需求改，请直接按Enter  (默认: $HOME/ceremonyclient/node/.config): " LOCAL_DIR
+  read -r -p "请输入服务器默认目录,如无需求改，请直接按Enter  (默认: $HOME/ceremonyclient/node/.config): " LOCAL_DIR
   LOCAL_DIR=${LOCAL_DIR:-$HOME/ceremonyclient/node/.config}
 
-  read -p "请输入 Dropbox 默认目录,每台服务器配置不同的目录，请自行修改 (默认: $HOME/Dropbox/666): " DROPBOX_DIR
+  read -r -p "请输入 Dropbox 默认目录,每台服务器配置不同的目录，请自行修改 (默认: $HOME/Dropbox/666): " DROPBOX_DIR
   DROPBOX_DIR=${DROPBOX_DIR:-$HOME/Dropbox/666}
 
   # 安装 Dropbox CLI
@@ -66,8 +77,11 @@ if [ "$choice" -eq 2 ]; then
 
   # 创建同步脚本
   SYNC_SCRIPT=$HOME/sync_to_dropbox.sh
-  cat <<EOL > $SYNC_SCRIPT
+  cat <<EOL > "$SYNC_SCRIPT"
 #!/bin/bash
+
+# cron 的默认 PATH 不包含 /usr/local/bin，这里显式设置以便找到 dropbox 命令
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # 本地目录路径
 LOCAL_DIR=$LOCAL_DIR
@@ -93,14 +107,14 @@ rsync -av --delete \$LOCAL_DIR/ \$DROPBOX_DIR/
 EOL
 
   # 赋予脚本执行权限
-  chmod +x $SYNC_SCRIPT
+  chmod +x "$SYNC_SCRIPT"
 
   # 配置定时任务
   echo "请选择您希望同步的频率："
   echo "1) 每隔10分钟同步一次"
   echo "2) 每隔1小时同步一次"
   echo "3) 每隔1天同步一次"
-  read -p "请输入选择 (1, 2 或 3): " sync_choice
+  read -r -p "请输入选择 (1, 2 或 3): " sync_choice
 
   case $sync_choice in
     1)
@@ -118,13 +132,17 @@ EOL
       ;;
   esac
 
-  (crontab -l 2>/dev/null; echo "$CRON_SCHEDULE $HOME/sync_to_dropbox.sh") | crontab -
+  # 写入定时任务（幂等）：先移除旧的同步任务和开机自启任务，再写入新的
+  REBOOT_LINE="@reboot /usr/local/bin/dropbox start"
+  (crontab -l 2>/dev/null | grep -vF "$SYNC_SCRIPT" | grep -vxF "$REBOOT_LINE"
+   echo "$CRON_SCHEDULE $SYNC_SCRIPT"
+   echo "$REBOOT_LINE") | crontab -
 
   echo "配置完成。您的目录将根据您选择的频率同步到 Dropbox，请重新启动脚本运行选项3，启动dropbox，并完成第一次同步。"
   exit 0
 fi
 
-if [ "$choice" -eq 3 ]; then
+if [ "$choice" = "3" ]; then
   # 启动 Dropbox
   dropbox start
 
@@ -137,9 +155,9 @@ if [ "$choice" -eq 3 ]; then
 
   # 立即执行一次同步
   SYNC_SCRIPT=$HOME/sync_to_dropbox.sh
-  if [ -f $SYNC_SCRIPT ]; then
+  if [ -f "$SYNC_SCRIPT" ]; then
     echo "立即执行同步脚本..."
-    bash $SYNC_SCRIPT
+    bash "$SYNC_SCRIPT"
     echo "同步完成。"
   else
     echo "同步脚本不存在。请先配置同步脚本和定时任务（选项 2）。"
@@ -148,7 +166,7 @@ if [ "$choice" -eq 3 ]; then
   exit 0
 fi
 
-if [ "$choice" -eq 4 ]; then
+if [ "$choice" = "4" ]; then
   echo "退出脚本。"
   exit 0
 fi
