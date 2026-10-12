@@ -150,4 +150,4 @@ rm -rf ~/.dropbox-dist ~/.dropbox
 
 ## 许可证
 
-本仓库目前没有附带许可证文件。如需开源使用，建议添加 `LICENSE`（例如 MIT）。
+本项目采用 [MIT 许可证](LICENSE)。
