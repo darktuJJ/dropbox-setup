@@ -150,4 +150,4 @@ rm -rf ~/.dropbox-dist ~/.dropbox
 
 ## License
 
-This repository does not currently include a license file. If you want it to be open source, consider adding a `LICENSE` (e.g. MIT).
+This project is licensed under the [MIT License](LICENSE).
